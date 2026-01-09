@@ -1,0 +1,145 @@
+# Taller Individual 3
+## EDA (Exploratory Data Analysis)
+
+**Semana:** 12  
+**Asignatura:** Programación Funcional y Reactiva  
+
+---
+
+### Objetivos:
+- Crear un `case class` en Scala para modelar datos específicos de un archivo CSV de la LigaPro.
+- Manipular colecciones de datos y realizar operaciones de filtrado y cálculos estadísticos básicos.
+- Aplicar una fórmula matemática de dispersión mediante el uso de funciones de agregación.
+
+> [!IMPORTANT]
+> Resolver el siguiente problema de forma **individual**. El archivo a utilizar es: [**`LigaPro2025-2026.csv`**](https://www.dropbox.com/scl/fi/f0e2dybzz48zp8i2aj01a/LigaPro2025-2026.csv?rlkey=sw9z7mwrzvpj3kpiht2xfoz09&st=xdgxbms2&dl=0). El estudiante debe desarrollar toda la solución (definición de estructura, lectura y análisis) en **un mismo archivo de Scala**. El trabajo se presenta directamente al docente en el aula.
+
+---
+
+### Parte 1: Definición de case class y lectura de archivo
+
+1. **Definición de la estructura:** Cree una `case class` llamada `Jugador` que permita leer las siguientes columnas del archivo CSV: `Pos`, `Nombre`, `Equipo`, `PJ` y `Goles`.
+
+2. **Implementación de lectura:** Utilizando la librería `fs2-data-csv` y el stack de `Cats Effect`, realice la lectura del archivo y convierta los datos en una lista de objetos de tipo `Jugador`. 
+    - **Nota:** El delimitador del archivo es la coma (`,`).
+
+---
+```scala
+package models
+
+  case class Jugador(
+                      Pos: String,
+                      Nombre: String,
+                      Equipo: String,
+                      PJ: Int,
+                      Goles: Int
+                    )
+```
+
+### Parte 2: Análisis de datos (EDA)
+
+Utilizando la lista de objetos obtenida en la parte anterior, implemente la lógica dentro del mismo programa para obtener los siguientes indicadores:
+
+1. **Sumatoria:** Calcule el total de goles marcados por todos los jugadores en el listado.
+2. **Promedio:** Obtenga el promedio de partidos jugados (`PJ`) de todos los jugadores.
+3. **Valores Extremos:** Encuentre el valor **máximo** y el valor **mínimo** de la columna de partidos jugados (`PJ`).
+4. **Estadístico Adicional (Desviación Media):** Calcule la Desviación Media de los goles. Este estadístico mide cuánto se alejan, en promedio, los goles de cada jugador respecto a la media aritmética. 
+
+La fórmula es:
+
+$$
+DM = \frac{\sum_{i=1}^{n} |x_i - \overline{x}|}{n}
+$$
+
+Donde:
+- $x_i$: es el número de **goles** de cada jugador.
+- $\overline{x}$: es el promedio de **goles** del conjunto.
+- $n$: es el número total de jugadores.
+- $| \dots |$: representa el valor absoluto.
+
+---
+```scala
+package models
+
+import cats.effect.{IO, IOApp}
+import fs2.*
+import fs2.io.file.{Files, Path}
+import fs2.data.csv.*
+import fs2.data.csv.generic.semiauto.*
+
+object Eda_jugador extends IOApp.Simple:
+  given CsvRowDecoder[Jugador, String] = deriveCsvRowDecoder[Jugador]
+
+  val filePath: Path = Path("C:\\Users\\hansa\\OneDrive\\Escritorio\\Hans\\Programacion reaactiva\\TallerB2S12\\src\\main\\resources\\Data\\LigaPro2025-2026.csv")
+
+  val run: IO[Unit] =
+    Files[IO]
+      .readAll(filePath)
+      .through(text.utf8.decode)
+      .through(decodeUsingHeaders[Jugador](','))
+      .compile
+      .toList
+      .flatMap { jugadores =>
+
+        val n = jugadores.length
+        val totalGoles = jugadores.map(_.Goles).sum
+        val promedioPJ =
+          if n > 0 then jugadores.map(_.PJ).sum / n.toDouble else 0.0
+
+        val maxPJ = jugadores.map(_.PJ).maxOption.getOrElse(0)
+        val minPJ = jugadores.map(_.PJ).minOption.getOrElse(0)
+
+        val promedioGoles =
+          if n > 0 then totalGoles / n.toDouble else 0.0
+        val desviacionMedia =
+          if n > 0 then
+            jugadores.map(j => math.abs(j.Goles - promedioGoles)).sum / n
+          else 0.0
+
+        IO.println("Analisis LigaPro 2025-2026") >>
+          IO.println(s"Total de jugadores: $n") >>
+          IO.println(s"Total de goles: $totalGoles") >>
+          IO.println(f"Promedio PJ: $promedioPJ%.2f") >>
+          IO.println(s"Maximo PJ: $maxPJ") >>
+          IO.println(s"Minimo PJ: $minPJ") >>
+          IO.println(f"Desviacion Media de goles: $desviacionMedia%.2f")
+      }.handleErrorWith { error =>
+  IO.println(s"Error procesando CSV: ${error.getMessage}")
+}
+```
+
+### Parte 3: Análisis Crítico (Comentario en el Código)
+
+**Instrucción de cierre:** Una vez obtenido el valor de la **Desviación Media (DM)**, el estudiante no debe simplemente imprimirlo, sino que debe **redactar una conclusión breve como un comentario de bloque (`/* ... */`) al final de su archivo de código Scala**. 
+
+En dicho comentario, debe inferir lo siguiente basándose en el resultado:
+* ¿Qué interpretación le da a este valor respecto a la consistencia de los goleadores de la liga? (¿Están todos cerca del promedio o hay mucha disparidad?).
+```
+ La Desviación Media obtenida muestra que tan parejos son los
+   goleadores de la LigaPro. Si el valor es bajo significa que
+   la mayoria de los jugadores tienen una cantidad de goles
+   parecida al promedio, por lo que el rendimiento ofensivo
+   es bastante regular entre ellos.
+
+   En cambio si el valor es alto se puede notar que hay mucha
+   diferencia entre los jugadores ya que pocos concentran
+   muchos goles mientras que otros anotan muy poco o nada.
+   Esto indica que la liga depende bastante de algunos
+   goleadores especificos.
+
+   En general, este resultado ayuda a entender si los goles
+   están bien repartidos entre los jugadores o si existe una
+   gran desigualdad en el rendimiento goleador.
+```
+> **Nota de desarrollo:** Trabajar en un único archivo fuente de Scala que contenga la `case class`, la lógica de procesamiento y el comentario final para ser revisado por el docente.
+
+---
+
+### ✅ Calificación:
+
+Una vez que termine debe presentar su trabajo a su docente.
+
+- **10 puntos:** si presenta en el horario de prácticas y experimentación.
+- **7 puntos:** si presenta en el horario de tutoría.
+
+**La hora máxima de presentación será las 08h30.**
